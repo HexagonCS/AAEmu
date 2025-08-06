@@ -23,3 +23,5 @@ publish/
 *.sqlite3
 .server_files
 .env
+dotnet-install.sh
+packages-microsoft-prod.deb
