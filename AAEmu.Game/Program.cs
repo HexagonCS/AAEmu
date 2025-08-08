@@ -35,6 +35,24 @@ public static class Program
         _launchArgs = args;
         Initialization();
 
+        // Developer utility: inspect-db => generate schema outputs then exit
+        if (args.Length > 0 && args[0].Equals("inspect-db", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var outArg = args.Skip(1).FirstOrDefault(a => a.StartsWith("--out=", StringComparison.OrdinalIgnoreCase));
+                var outDir = outArg != null ? outArg.Split('=', 2)[1] : Path.Combine(FileManager.AppPath, "DbInspect");
+                Utils.DB.SchemaInspector.GenerateAll(outDir);
+                Logger.Info($"DB inspection artifacts written to {outDir}");
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Logger.Fatal(ex, "inspect-db failed");
+                return 1;
+            }
+        }
+
         if (args.Length > 0 && args[0] == "compiler-check")
         {
             Logger.Info("Check compilation");

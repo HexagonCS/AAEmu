@@ -15,7 +15,7 @@ public class AiPathsManager : Singleton<AiPathsManager>
 
     public AiPathsManager()
     {
-        PathFileFolder = Path.Combine("Data", "Path");
+        PathFileFolder = Path.Combine(AppContext.BaseDirectory, "Data", "Path");
     }
 
     /// <summary>

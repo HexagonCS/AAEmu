@@ -3,6 +3,8 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Models.Game.DoodadObj.Templates;
 using AAEmu.Game.Models.Game.Units;
 using AAEmu.Game.Models.Tasks.Doodads;
+using AAEmu.Game.Models.Game.Skills.Static;
+using System.Linq;
 
 namespace AAEmu.Game.Models.Game.DoodadObj.Funcs;
 
@@ -25,6 +27,33 @@ public class DoodadFuncTimer : DoodadPhaseFuncTemplate
                 Logger.Trace("DoodadFuncTimer: TemplateId {0},  Delay {1}, NextPhase {2}, KeepRequester {3}, ShowTip {4}, ShowEndTime {5}, Tip {6}", owner.TemplateId, Delay, NextPhase, KeepRequester, ShowTip, ShowEndTime, Tip);
 
             double customDelay = Delay;
+
+            // Apply production-time reductions from active buffs
+            // Uses SkillModifiers by tag 1157 ("Decrease production time") with SkillAttribute.CastTime
+            try
+            {
+                var mods = caster.SkillModifiersCache?.GetModifiersForTagIdWithAttribute(1157, SkillAttribute.CastTime);
+                if (mods != null && mods.Count > 0)
+                {
+                    // Apply in the same order logic as SkillModifiers.ApplyModifiers
+                    foreach (var modifier in mods.OrderBy(m => m.UnitModifierType))
+                    {
+                        switch (modifier.UnitModifierType)
+                        {
+                            case UnitModifierType.Percent:
+                                customDelay += (customDelay * (modifier.Value / 100.0f));
+                                break;
+                            case UnitModifierType.Value:
+                                customDelay += modifier.Value;
+                                break;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignore and fall back to base delay
+            }
             var timeLeft = customDelay;
 
             if (owner.OverridePhaseTime > DateTime.MinValue)

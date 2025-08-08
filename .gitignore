@@ -25,3 +25,5 @@ publish/
 .env
 dotnet-install.sh
 packages-microsoft-prod.deb
+/Exported Game Pak/
+/DecompiledPak/
