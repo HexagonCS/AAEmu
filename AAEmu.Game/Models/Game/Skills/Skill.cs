@@ -311,6 +311,18 @@ public class Skill
             var baseCast = Template.CastingTime;
             var modified = unit.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.CastTime, baseCast);
             castTime = (int)(unit.CastTimeMul * modified);
+
+            // Apply actability-based production-time multiplier for vocation skills
+            // This reduces cast time based on the character's proficiency rank
+            if ((Template.ActabilityGroupId > 0) && (caster is Character prodChar))
+            {
+                if (prodChar.Actability.Actabilities.TryGetValue((byte)Template.ActabilityGroupId, out var actAbility))
+                {
+                    var timeMul = actAbility.GetProductionTimeMultiplier();
+                    if (timeMul > 0f && timeMul != 1f)
+                        castTime = (int)Math.Round(castTime * timeMul);
+                }
+            }
             Logger.Debug("Skill.Use cast time: skill={0}, base={1}, modified={2}, final={3}", Template?.Id, baseCast, modified, castTime);
             try
             {

@@ -1,12 +1,17 @@
-﻿using AAEmu.Game.Core.Managers.UnitManagers;
+﻿using AAEmu.Game.Core.Managers;
+using AAEmu.Game.Core.Managers.UnitManagers;
 using AAEmu.Game.Core.Packets.G2C;
 using AAEmu.Game.Models.Game.Items.Actions;
 using AAEmu.Game.Models.StaticValues;
 using MySql.Data.MySqlClient;
+using AAEmu.Game.Models.Game.Skills.Templates;
+using AAEmu.Game.Models;
+using AAEmu.Game.Models.Game.Skills;
+using AAEmu.Game.Models.Game.Units;
 
 namespace AAEmu.Game.Models.Game.Char;
 
-public class CharacterActability
+public partial class CharacterActability
 {
     public Dictionary<uint, Actability> Actabilities { get; set; }
 
@@ -65,6 +70,9 @@ public class CharacterActability
         }
 
         Owner.SendPacket(new SCExpertLimitModifiedPacket(isUpgrade, id, actability.Step));
+
+        // Apply or remove rank-based passive buffs tied to this actability
+        ApplyRankBuffsFor(id);
     }
 
     public void ExpandExpert()
@@ -141,6 +149,9 @@ public class CharacterActability
                 }
             }
         }
+
+        // After loading, ensure rank-based passive buffs are applied
+        ApplyAllRankBuffs();
     }
 
     public void Save(MySqlConnection connection, MySqlTransaction transaction)
@@ -158,6 +169,64 @@ public class CharacterActability
                 command.Parameters.AddWithValue("@step", actability.Step);
                 command.Parameters.AddWithValue("@owner", Owner.Id);
                 command.ExecuteNonQuery();
+            }
+        }
+    }
+}
+
+// Helpers to apply rank-based passive buffs by Actability rank
+public partial class CharacterActability
+{
+    private void ApplyAllRankBuffs()
+    {
+        if (AppConfiguration.Instance?.ActabilityRankBuffs == null || AppConfiguration.Instance.ActabilityRankBuffs.Count == 0)
+            return;
+
+        foreach (var rule in AppConfiguration.Instance.ActabilityRankBuffs)
+        {
+            ApplyRule(rule);
+        }
+    }
+
+    private void ApplyRankBuffsFor(uint actabilityId)
+    {
+        if (AppConfiguration.Instance?.ActabilityRankBuffs == null || AppConfiguration.Instance.ActabilityRankBuffs.Count == 0)
+            return;
+
+        foreach (var rule in AppConfiguration.Instance.ActabilityRankBuffs)
+        {
+            if (rule.ActabilityId == actabilityId)
+                ApplyRule(rule);
+        }
+    }
+
+    private void ApplyRule(AppConfiguration.ActabilityRankBuffRule rule)
+    {
+        if (!Actabilities.TryGetValue(rule.ActabilityId, out var act)
+            && !Actabilities.TryGetValue((byte)rule.ActabilityId, out act))
+            return;
+
+        var hasBuff = Owner.Buffs.CheckBuff(rule.BuffId);
+        if (act.Step >= rule.MinStep)
+        {
+            if (!hasBuff)
+            {
+                var buffTemplate = SkillManager.Instance.GetBuffTemplate(rule.BuffId);
+                if (buffTemplate != null)
+                {
+                    var newEffect = new Buff(Owner, Owner, new SkillCasterUnit(), buffTemplate, null, DateTime.UtcNow)
+                    {
+                        Passive = true
+                    };
+                    Owner.Buffs.AddBuff(newEffect);
+                }
+            }
+        }
+        else
+        {
+            if (hasBuff)
+            {
+                Owner.Buffs.RemoveBuff(rule.BuffId);
             }
         }
     }
