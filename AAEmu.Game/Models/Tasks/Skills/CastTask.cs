@@ -10,14 +10,16 @@ public class CastTask : SkillTask
     private readonly BaseUnit _target;
     private readonly SkillCastTarget _targetCaster;
     private readonly SkillObject _skillObject;
+    public ushort TlIdSnapshot { get; }
 
-    public CastTask(Skill skill, BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject) : base(skill)
+    public CastTask(Skill skill, BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject, ushort tlIdSnapshot) : base(skill)
     {
         _caster = caster;
         _casterCaster = casterCaster;
         _target = target;
         _targetCaster = targetCaster;
         _skillObject = skillObject;
+        TlIdSnapshot = tlIdSnapshot;
     }
 
     public override void Execute()
@@ -32,7 +34,7 @@ public class CastTask : SkillTask
         {
             NLog.LogManager.GetCurrentClassLogger().Debug(
                 "CastTask start: skill={0}, tlId={1}, caster={2}, target={3}",
-                Skill?.Template?.Id, Skill?.TlId, _caster?.ObjId, _targetCaster?.ObjId);
+                Skill?.Template?.Id, TlIdSnapshot, _caster?.ObjId, _targetCaster?.ObjId);
             Skill.Cast(_caster, _casterCaster, _target, _targetCaster, _skillObject);
         }
         catch (Exception e)

@@ -17,12 +17,14 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
     private readonly HashSet<uint> _taskIds = [];
     private readonly object _taskIdLock = new();
     private uint _taskIdIndex = 1;
+    private DateTime _lastNowUtc = DateTime.MinValue; // monotonic guard
 
     public static readonly CrontabSchedule.ParseOptions s_crontabScheduleParseOptions = new() { IncludingSeconds = true };
 
     public void Initialize()
     {
         _queue.Clear();
+        _lastNowUtc = DateTime.UtcNow;
     }
 
     public void Start()
@@ -39,16 +41,36 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
     {
         try
         {
-            var now = DateTime.UtcNow;
+            var rawNow = DateTime.UtcNow;
+            // Monotonic guard: never allow time to move backwards for scheduling
+            var now = rawNow;
+            if (now < _lastNowUtc)
+            {
+                var clockSkew = _lastNowUtc - now;
+                s_logger.Warn("TaskManager detected system clock moved backwards by {0} ms; clamping now to last value.", clockSkew.TotalMilliseconds.ToString("F0"));
+                now = _lastNowUtc;
+            }
+            else
+            {
+                _lastNowUtc = now;
+            }
             var initialCount = _queue.Count;
             s_logger.Debug("TaskManager.Tick enter: now={0:O}, queued={1}", now, initialCount);
             var toRemove = new List<uint>();
             var dueCount = 0;
             var executedCount = 0;
+            var earliestTrigger = DateTime.MaxValue;
+            var farFutureCount = 0; // tasks scheduled >30s ahead
             foreach (var (id, task) in _queue.ToArray())
             {
                 try
                 {
+                    // Track earliest trigger and far-future stats for health logging
+                    if (task.TriggerTime < earliestTrigger)
+                        earliestTrigger = task.TriggerTime;
+                    if (task.TriggerTime - now > TimeSpan.FromSeconds(30))
+                        farFutureCount++;
+
                     if (task.TriggerTime >= now)
                         continue;
 
@@ -91,7 +113,10 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
                 _queue.Remove(objId, out _);
                 ReleaseId(objId);
             }
-            s_logger.Debug("TaskManager.Tick exit: due={0}, executed={1}, removed={2}, queuedNow={3}", dueCount, executedCount, toRemove.Count, _queue.Count);
+            var earliestDeltaMs = earliestTrigger == DateTime.MaxValue ? (double?)null : (earliestTrigger - now).TotalMilliseconds;
+            s_logger.Debug("TaskManager.Tick exit: due={0}, executed={1}, removed={2}, queuedNow={3}, earliestDeltaMs={4}, farFuture={5}",
+                dueCount, executedCount, toRemove.Count, _queue.Count,
+                earliestDeltaMs?.ToString("F0") ?? "n/a", farFutureCount);
         }
         catch (Exception e)
         {

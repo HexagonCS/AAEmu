@@ -36,17 +36,34 @@ public class CSStopCastingPacket : GamePacket
             }
         }
 
-        if (Connection.ActiveChar.SkillTask == null || Connection.ActiveChar.SkillTask.Skill.TlId != tlId)
+        if (Connection.ActiveChar.SkillTask == null)
         {
             Logger.Warn($"Stop requested, but no skill active? Tl: {tlId}, Pid: {plotTlId}, objId: {objId}, Character: {Connection.ActiveChar.Name}");
             return;
         }
 
         var st = Connection.ActiveChar.SkillTask;
+        if (st is CastTask castTask)
+        {
+            if (castTask.TlIdSnapshot != tlId)
+            {
+                Logger.Warn($"Stop requested TlId mismatch (cast snapshot {castTask.TlIdSnapshot} != {tlId}). Tl: {tlId}, Pid: {plotTlId}, objId: {objId}, Character: {Connection.ActiveChar.Name}");
+                return;
+            }
+        }
+        else
+        {
+            if (st.Skill.TlId != tlId)
+            {
+                Logger.Warn($"Stop requested, but active skill tlId differs (active {st.Skill.TlId} != {tlId}). Tl: {tlId}, Pid: {plotTlId}, objId: {objId}, Character: {Connection.ActiveChar.Name}");
+                return;
+            }
+        }
         if (st != null)
         {
+            ushort tlForLog = st is CastTask cst ? cst.TlIdSnapshot : st.Skill?.TlId ?? (ushort)0;
             Logger.Debug("StopCasting requested: char={0}, tlId={1}, plotTlId={2}, skill={3}, triggerAt={4:O}, now={5:O}",
-                Connection.ActiveChar.Name, tlId, plotTlId, st.Skill?.Template?.Id, st.TriggerTime, DateTime.UtcNow);
+                Connection.ActiveChar.Name, tlForLog, plotTlId, st.Skill?.Template?.Id, st.TriggerTime, DateTime.UtcNow);
         }
 
         Connection.ActiveChar.SkillTask.Cancel();

@@ -45,7 +45,7 @@ public class CastWatchdogTask : Task
 
             // If the scheduled cast already ran, the unit's SkillTask will be null (cleared in Skill.Cast)
             // Only intervene if the original cast task appears to still be pending for this TlId
-            if (unit.SkillTask is CastTask ct && ct.Skill?.TlId == _tlId)
+            if (unit.SkillTask is CastTask ct && ct.TlIdSnapshot == _tlId)
             {
                 Logger.Warn("CastWatchdog firing overdue cast: skill={0}, tlId={1}, caster={2}", _skill.Template?.Id, _tlId, unit.ObjId);
                 // Proactively execute the cast now

@@ -352,7 +352,7 @@ public class Skill
                 RealCastTimeDiv10 = (ushort)(castTime / 10), // calculate with adjustments
             }, true);
 
-            unit.SkillTask = new CastTask(this, caster, casterCaster, target, targetCaster, skillObject);
+            unit.SkillTask = new CastTask(this, caster, casterCaster, target, targetCaster, skillObject, TlId);
             TaskManager.Instance.Schedule(unit.SkillTask, TimeSpan.FromMilliseconds(castTime));
 
             // Watchdog: if the scheduled cast doesn't execute on time, force-dispatch it
