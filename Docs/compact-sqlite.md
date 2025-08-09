@@ -10,6 +10,11 @@ ONLY USE THE ONE IN AAEmu.Game/Data/ FOLDER! The others are copied to their envi
   - `AAEmu.Game/Utils/DB/SQLite.cs` (creates read-only connection)
   - `AAEmu.Game/Utils/DB/CompactSqliteHelper.cs` (tables, columns, indices, row counts)
 
+Build copy behavior and verification
+- On build, the file is copied to `AAEmu.Game/bin/<Config>/net9.0/Data/compact.sqlite3` and that runtime copy is what the server reads.
+- When applying patches, prefer applying to `AAEmu.Game/Data/compact.sqlite3` and then rebuild. Alternatively patch the runtime copy directly and avoid rebuilding afterward (rebuild may overwrite your changes).
+- Quick verification after build: `sqlite3 AAEmu.Game/bin/<Config>/net9.0/Data/compact.sqlite3 "SELECT COUNT(1) FROM sqlite_master;"` or specific row checks.
+
 ## Purpose & Characteristics
 - Read-only content DB extracted from client assets; not relational gameplay state.
 - Holds static definitions for items, skills, doodads, quests, FX, crafting, UI text hooks, etc.
@@ -79,6 +84,20 @@ ONLY USE THE ONE IN AAEmu.Game/Data/ FOLDER! The others are copied to their envi
   - Modifiers on `buff_id=8000010`:
     - Vocation gain: `unit_modifiers(owner_type='Buff', owner_id=8000010, unit_attribute_id=137, value=10)`
     - Production time: `skill_modifiers(owner_type='Buff', owner_id=8000010, skill_attribute_id=4, unit_modifier_type_id=1, value=-10)`
+
+### Production-Time Reduction (cast-time and timers)
+- Concept: “Decrease production time” is modeled as cast-time reductions on relevant skills and as reductions on pure timers.
+- Tags: Tag id `1157` denotes “Decrease production time”. Skills associated with production/gathering are tagged with `1157` (see `tagged_skills`).
+- Skill modifiers: Cast-time reductions live in `skill_modifiers` with `owner_type='Buff'`, `owner_id=<buff_id>`, `skill_attribute_id=4` (CastTime), `unit_modifier_type_id=1` (Percent), negative values to reduce time (e.g., `-10`, `-80`).
+- Cast formula (server): `cast_time_ms = unit.CastTimeMul * ApplyModifiers(skill, CastTime, base_cast_ms)` where `ApplyModifiers` aggregates modifiers for the skill id and for its tags (including 1157).
+- Pure timers: Some interactions use phase timers (not a skill cast). The server applies tag 1157 reductions to doodad phase timers via `DoodadFuncTimer` as a runtime behavior.
+
+Useful lookups
+- Check a production skill is tagged: `SELECT 1 FROM tagged_skills WHERE tag_id=1157 AND skill_id=<SKILL_ID> LIMIT 1;`
+- Inspect cast-time modifiers for a buff: `SELECT id, owner_type, owner_id, tag_id, skill_attribute_id, unit_modifier_type_id, value FROM skill_modifiers WHERE owner_type='Buff' AND owner_id=<BUFF_ID> AND skill_attribute_id=4;`
+- The common attributes referenced in this domain:
+  - UnitAttribute 137 = `LivingPointGainMul` (vocation badges multiplier)
+  - SkillAttribute 4 = `CastTime`
 
 ## Querying & Inspection
 - C# connection (read-only): `using var conn = SQLite.CreateConnection();`
@@ -154,6 +173,9 @@ Note on sandboxing/approvals:
 - Do not edit in place; `compact.sqlite3` is an external asset. Replace the file to update.
 - Ensure placement under `.../AAEmu.Game/bin/<Config>/net9.0/Data/compact.sqlite3`.
 - On startup, `AAEmu.Game` validates presence; missing file logs a fatal error. Use `CompactSqliteHelper.LogSchemaOverview()` to sanity-check.
+
+Client UI localization caveat
+- Server `localized_texts` updates are useful for diagnostics and any server-originated text, but the game client renders UI/tooltips from client packs. Changing item/buff text in server DB does not change client UI strings. Update client assets if you need visible UI changes.
 
 ## Patch Workflow (.sql scripts)
 - Policy: Do not mutate the DB from runtime. If changes are needed, create standalone `.sql` patch files for a human to apply.

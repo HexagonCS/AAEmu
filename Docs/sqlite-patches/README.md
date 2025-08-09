@@ -24,6 +24,14 @@ See `TEMPLATE_patch.sql` for a starting point. Replace placeholders with actual 
 
 Rollback = restore your backup.
 
+Runtime copy and rebuild notes
+- The AAEmu build copies `AAEmu.Game/Data/compact.sqlite3` into `AAEmu.Game/bin/<Config>/net9.0/Data/compact.sqlite3` which the server reads.
+- Recommended flow: apply your patch to `AAEmu.Game/Data/compact.sqlite3`, then rebuild. Alternatively, patch the runtime copy and avoid rebuilding afterward.
+- Always verify on the runtime copy after build with an explicit `SELECT` for the row(s) you changed.
+
+Client UI localization caveat
+- Changing `localized_texts` does not change client-visible UI text (tooltips, item names). Those come from client packs. Update client assets where UI changes are required; use `localized_texts` for server-side diagnostics/messages.
+
 ## Localization updates (required when text mentions changed values)
 - Table: `localized_texts(tbl_name, tbl_column_name, idx, ko, en_us, ...)`.
 - Always update both Korean (`ko`) and English (`en_us`) strings when your patch changes in-game numbers or wording.

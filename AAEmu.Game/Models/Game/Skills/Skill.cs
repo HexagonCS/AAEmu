@@ -292,7 +292,23 @@ public class Skill
         // Calculate casting time if needed
         var castTime = 0;
         if (Template.CastingTime > 0)
-            castTime = (int)(unit.CastTimeMul * unit.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.CastTime, Template.CastingTime));
+        {
+            var baseCast = Template.CastingTime;
+            var modified = unit.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.CastTime, baseCast);
+            castTime = (int)(unit.CastTimeMul * modified);
+            try
+            {
+                // Debug trace for production-time reductions
+                var tags = SkillManager.Instance.GetSkillTags(Template.Id);
+                var hasProdTag = tags.Contains(1157);
+                if (hasProdTag)
+                {
+                    var prodMods = unit.SkillModifiersCache.GetModifiersForTagIdWithAttribute(1157, SkillAttribute.CastTime)?.Count ?? 0;
+                    Logger.Debug($"Skill CastTime modifiers: skill={Template.Id}, base={baseCast}, modified={modified}, castTime={castTime}, hasTag1157={hasProdTag}, tag1157Mods={prodMods}");
+                }
+            }
+            catch { /* best-effort debug */ }
+        }
 
         /*
         // TODO: Replace Old code

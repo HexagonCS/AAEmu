@@ -28,6 +28,18 @@ This guide explains how skills execute in AAEmu, when plots are used, how projec
 - The server treats `SpecialEffect.Projectile` as a no-op (logging only) to avoid duplicate simulation.
 - If timing at impact matters, plots compute delays (see `PlotNextEvent.GetProjectileDelay`) and apply effects at the hit moment.
 
+## Cast Time Modifiers (Production Time)
+- Cast time calculation: `castTimeMs = unit.CastTimeMul * ApplyModifiers(skill, SkillAttribute.CastTime, baseCastMs)`.
+- `ApplyModifiers` aggregates modifiers:
+  - Skill-specific (`skill_modifiers.owner_type='Skill' AND owner_id=<skill_id>`)
+  - Tag-based (`skill_modifiers.owner_type` tied to tag mappings). Production-time uses tag id `1157` (“Decrease production time”).
+- Production-time reductions are represented as `skill_modifiers` with `skill_attribute_id=4` (CastTime), `unit_modifier_type_id=1` (Percent), negative values to reduce time (e.g., `-10`, `-80`).
+- Some interactions are pure timers (not skills). Those phase timers are reduced by the same tag via `DoodadFuncTimer` at runtime.
+
+Inspection helpers (sqlite3):
+- Confirm a skill is production-tagged: `SELECT 1 FROM tagged_skills WHERE tag_id=1157 AND skill_id=<SKILL_ID> LIMIT 1;`
+- View modifiers for a buff: `SELECT id, owner_type, owner_id, tag_id, skill_attribute_id, unit_modifier_type_id, value FROM skill_modifiers WHERE owner_type='Buff' AND owner_id=<BUFF_ID> AND skill_attribute_id=4;`
+
 ## Crowd Control Semantics
 - CC flags are defined on `buffs` (e.g., `stun`, `root`, `sleep`, `knock_down`). Skills apply them via `BuffEffect` from `skill_effects`.
 - Controllers abort if unit becomes stunned/rooted/etc. (`LeapSkillController` checks).
@@ -93,4 +105,3 @@ Below are representative examples. IDs can differ across content versions; use `
 - Precompute `PlotEventTemplate.HasSpecialEffects()` post-load to reduce load-order coupling between PlotManager and SkillManager.
 - Normalize controller abort guards across controller kinds (stun/root/knockdown/fastened checks).
 - Add integration checks for: (a) projectile+plot delays impact, (b) projectile-only applies immediately, (c) controller aborts on CC.
-
