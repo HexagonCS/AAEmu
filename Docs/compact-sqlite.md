@@ -88,10 +88,19 @@ Build copy behavior and verification
 New attribute (loot amount multiplier)
 - Purpose: multiply non-coin loot item counts by x*(1+y), where `y` is the effect value interpreted as percent/100.
 - Server attribute: `UnitAttribute.LootItemCountMul = 187`.
-- Semantics: values are VALUE-type and represent percent offset; use `value=100` for +100% (2x items), `value=50` for +50% (1.5x), etc.
-- Example (Lucky Quicksilver Tonic): add a row to `unit_modifiers` for its buff id:
-  - `unit_modifiers(owner_type='Buff', owner_id=<buff_id>, unit_attribute_id=187, unit_modifier_type_id=0, value=100)`
-  - Effect applies to NPC drops and loot from doodads/skills that use loot packs; coins follow gold multipliers, not this effect.
+- Semantics: VALUE-type; percent offset. Examples: `value=100` → +100% (2x items), `value=200` → +200% (3x), `value=50` → +50% (1.5x).
+- Scope: Applies to all loot generated via loot packs (NPC corpses, doodads, skills like fishing/gacha). Coins follow `World.GoldLootMultiplier`/`LootGoldMul`, not this attribute.
+
+Example: Lucky Quicksilver Tonic triples item counts
+- Find the buff chain for item `8000019`:
+  - `SELECT use_skill_id FROM items WHERE id=8000019;` → `8000012`
+  - `SELECT se.effect_id FROM skill_effects se WHERE se.skill_id=8000012 ORDER BY weight;` → `effect_id=8000031`
+  - `SELECT actual_type, actual_id FROM effects WHERE id=8000031;` → `actual_type='BuffEffect', actual_id=8000021`
+  - `SELECT buff_id FROM buff_effects WHERE id=8000021;` → `buff_id=8000009`
+- Insert the modifier to triple item counts: 
+  - `INSERT INTO unit_modifiers (id, owner_id, owner_type, unit_attribute_id, unit_modifier_type_id, value, linear_level_bonus)
+     VALUES (<new_id>, 8000009, 'Buff', 187, 0, 200, 0);`
+  - Use a unique `id` (e.g., `SELECT MAX(id)+1 FROM unit_modifiers;`).
 
 ### Production-Time Reduction (cast-time and timers)
 - Concept: “Decrease production time” is modeled as cast-time reductions on relevant skills and as reductions on pure timers.

@@ -29,6 +29,7 @@ This file orients any AI/dev agent to the repo in seconds. It links all supporti
 - Packet/protocol change: search in `AAEmu.Commons/Network` and respective service handlers in `AAEmu.Game` or `AAEmu.Login`.
 - Config change: copy `ExampleConfig.json` → `Config.json` in target service or prefer `dotnet user-secrets` per the service README.
 - Data-driven behavior (IDs, loot, skills): verify `compact.sqlite3`. See compact-sqlite.md for more info. (many human-readable fields (names, descriptions, UI strings) are in Korean. Searching by English text may not yield results; prefer IDs, category keys, or explicit queries that target known columns. Localization exists within the compact.sqlite3's 'localized_texts' table. It is recommended to first identify the Korean equivalent to any English string to lookup. Korean string is in the 'ko' column, and English string is in the 'en_us' column.)
+  - Loot amount multiplier: server supports `UnitAttribute.LootItemCountMul` (187, VALUE-type percent) on buffs to scale non-coin item counts; see `Docs/compact-sqlite.md` for the insert pattern and an example with Lucky Quicksilver Tonic. Also see world config `World.LootItemCountRate` for a global multiplier.
 - DB schema/state issues: use `SQL/` for MySQL base schemas; remember two DBs: `aaemu_login`, `aaemu_game`.
 
 ## Commands Cheat Sheet
@@ -43,6 +44,7 @@ This file orients any AI/dev agent to the repo in seconds. It links all supporti
 
 ## Data & Config Essentials
 - Game data (SQLite): place `compact.sqlite3` at `AAEmu.Game/Data/` (copied to `bin/<Config>/net9.0/Data/` on build). Docker: `.server_files/AAEmu.Game/Data/compact.sqlite3` (mounted to `/app/Data`).
+- World config: keys in `Configurations/World.json` bind to `WorldConfig` (merged in memory). Added `LootItemCountRate` to scale non-coin loot item counts globally (default 1.0). Existing bin configs use PreserveNewest copy semantics; update the project file or delete bin copies if you need to pick up source changes.
 - MySQL 8: two schemas `aaemu_login` and `aaemu_game`. In Docker Compose, hostnames are `db` (MySQL) and `login` (login service).
 - Secrets: never commit creds. Prefer `dotnet user-secrets` as outlined in `AAEmu.Login/README.md` and `AAEmu.Game/README.md`. For Docker, edit `.env` (e.g., `DB_PASSWORD`).
 - Text locale note: many `compact.sqlite3` text fields (item/skill/event names and descriptions) are in Korean. English keyword greps may not match expected rows; prefer ID-based searches or query the DB directly.

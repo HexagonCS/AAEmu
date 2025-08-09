@@ -41,6 +41,18 @@ The configuration structure is as follows:
 "HeightMapsEnable": false
 ```
 
+World.json (per‑world settings)
+
+The game also loads configuration fragments from `Configurations/*.json` (merged in order). The world-specific keys live in `Configurations/World.json` and bind to `WorldConfig`. Notable keys:
+
+```
+"World": {
+  "LootRate": 1.0,               // chance weighting for item drops
+  "GoldLootMultiplier": 1.0,     // multiplier for coin amounts
+  "LootItemCountRate": 1.0       // global multiplier for non-coin item counts (stacks with buffs)
+}
+```
+
 ### Copy Configuration File
 
 1. Copy `ExampleConfig.json` as `Config.json` in the `AAEmu.Game` directory
