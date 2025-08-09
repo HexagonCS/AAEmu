@@ -145,7 +145,12 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
             Logger.Info($"EnqueueEvaluation, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
 
             if (needNewTask)
-                TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), null, TimeSpan.FromMilliseconds(1));
+            {
+                // Schedule a single-shot evaluation run shortly after enqueueing.
+                // Using a small startDelay avoids executing immediately while holding this lock
+                // and does not rely on a long-lived repeating task.
+                TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
+            }
         }
     }
 
