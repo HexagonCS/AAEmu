@@ -30,7 +30,7 @@ public class DoodadFuncTimer : DoodadPhaseFuncTemplate
 
             // Apply production-time reductions from active buffs
             // Uses SkillModifiers by tag 1157 ("Decrease production time") with SkillAttribute.CastTime
-            try
+            /*try
             {
                 var mods = caster.SkillModifiersCache?.GetModifiersForTagIdWithAttribute(1157, SkillAttribute.CastTime);
                 if (mods != null && mods.Count > 0)
@@ -53,7 +53,7 @@ public class DoodadFuncTimer : DoodadPhaseFuncTemplate
             catch
             {
                 // ignore and fall back to base delay
-            }
+            }*/
             var timeLeft = customDelay;
 
             if (owner.OverridePhaseTime > DateTime.MinValue)
