@@ -23,7 +23,11 @@ public class CastTask : SkillTask
     public override void Execute()
     {
         if (Skill.Cancelled)
+        {
+            // Ensure the client is not left hanging if the skill was cancelled before cast completes
+            try { Skill.EndSkill(_caster); } catch { /* best-effort */ }
             return;
+        }
         try
         {
             NLog.LogManager.GetCurrentClassLogger().Debug(
