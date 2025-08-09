@@ -4,12 +4,15 @@ using System.Collections.Concurrent;
 using AAEmu.Commons.Utils;
 using NCrontab;
 using Task = AAEmu.Game.Models.Tasks.Task;
+using NLog;
+using AAEmu.Game.Models.Tasks.Skills;
 
 namespace AAEmu.Game.Core.Managers;
 
 // ReSharper disable once ClassNeverInstantiated.Global
 public class TaskManager : Singleton<TaskManager>, ITaskManager
 {
+    private static readonly Logger s_logger = LogManager.GetCurrentClassLogger();
     private readonly ConcurrentDictionary<uint, Task> _queue = new();
     private readonly HashSet<uint> _taskIds = [];
     private readonly object _taskIdLock = new();
@@ -34,37 +37,65 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
 
     private void Tick(TimeSpan delta)
     {
-        var now = DateTime.UtcNow;
-        var toRemove = new List<uint>();
-        foreach (var (id, task) in _queue)
+        try
         {
-            if (task.TriggerTime >= now)
-                continue;
-
-            System.Threading.Tasks.Task.Run(task.ExecuteAsync);
-            task.ExecuteCount++;
-
-            // Check if there still needs to be executions done
-            if ((task.RepeatCount < 0) || (task.ExecuteCount < task.RepeatCount))
+            var now = DateTime.UtcNow;
+            var initialCount = _queue.Count;
+            s_logger.Debug("TaskManager.Tick enter: now={0:O}, queued={1}", now, initialCount);
+            var toRemove = new List<uint>();
+            var dueCount = 0;
+            var executedCount = 0;
+            foreach (var (id, task) in _queue.ToArray())
             {
-                // If there is a CronSchedule set, use that to calculate the next TriggerTime
-                if (task.CronSchedule != null)
-                    task.TriggerTime = task.CronSchedule.GetNextOccurrence(now);
+                try
+                {
+                    if (task.TriggerTime >= now)
+                        continue;
 
-                // If there is an interval set, add it for the next TriggerTime
-                if (task.RepeatInterval != TimeSpan.Zero)
-                    task.TriggerTime = now + task.RepeatInterval;
+                    dueCount++;
+                    if (task is SkillTask st && st.Skill?.Template != null)
+                    {
+                        s_logger.Debug("TaskManager executing SkillTask: name={0}, id={1}, skill={2}, tlId={3}, triggerAt={4:O}, now={5:O}",
+                            task.Name, id, st.Skill.Template.Id, st.Skill.TlId, task.TriggerTime, now);
+                    }
 
-                continue; // Don't remove this Task from the queue yet
+                    System.Threading.Tasks.Task.Run(task.ExecuteAsync);
+                    task.ExecuteCount++;
+                    executedCount++;
+
+                    // Check if there still needs to be executions done
+                    if ((task.RepeatCount < 0) || (task.ExecuteCount < task.RepeatCount))
+                    {
+                        // If there is a CronSchedule set, use that to calculate the next TriggerTime
+                        if (task.CronSchedule != null)
+                            task.TriggerTime = task.CronSchedule.GetNextOccurrence(now);
+
+                        // If there is an interval set, add it for the next TriggerTime
+                        if (task.RepeatInterval != TimeSpan.Zero)
+                            task.TriggerTime = now + task.RepeatInterval;
+
+                        continue; // Don't remove this Task from the queue yet
+                    }
+
+                    toRemove.Add(id);
+                }
+                catch (Exception e)
+                {
+                    s_logger.Error("TaskManager.Tick task-loop exception for task {0} (id={1}): {2}\n{3}", task?.Name, id, e.Message, e.StackTrace);
+                    toRemove.Add(id);
+                }
             }
 
-            toRemove.Add(id);
+            foreach (var objId in toRemove)
+            {
+                _queue.Remove(objId, out _);
+                ReleaseId(objId);
+            }
+            s_logger.Debug("TaskManager.Tick exit: due={0}, executed={1}, removed={2}, queuedNow={3}", dueCount, executedCount, toRemove.Count, _queue.Count);
         }
-
-        foreach (var objId in toRemove)
+        catch (Exception e)
         {
-            _queue.Remove(objId, out _);
-            ReleaseId(objId);
+            s_logger.Error("TaskManager.Tick exception: {0}\n{1}", e.Message, e.StackTrace);
         }
     }
 
@@ -101,7 +132,13 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
             task.RepeatCount = 1;
         }
 
-        return _queue.TryAdd(taskId, task);
+        var added = _queue.TryAdd(taskId, task);
+        if (added && task is SkillTask st && st.Skill?.Template != null)
+        {
+            s_logger.Debug("TaskManager scheduled SkillTask: name={0}, id={1}, skill={2}, tlId={3}, triggerAt={4:O}, queuedNow={5}",
+                task.Name, taskId, st.Skill.Template.Id, st.Skill.TlId, task.TriggerTime, _queue.Count);
+        }
+        return added;
     }
 
     /// <summary>
@@ -145,6 +182,7 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
         if (res)
         {
             task.Cancelled = true;
+            s_logger.Debug("TaskManager cancelled task: name={0}, id={1}", task?.Name, task?.Id);
             ReleaseId(task.Id);
         }
 
@@ -153,14 +191,19 @@ public class TaskManager : Singleton<TaskManager>, ITaskManager
     public void RemoveTasks(Func<Task, bool> predicate)
     {
         // Take a snapshot of the current tasks to avoid modifying the collection while iterating.
-        foreach (var kvp in _queue.ToArray())
+        var snapshot = _queue.ToArray();
+        var removed = 0;
+        foreach (var kvp in snapshot)
         {
             if (predicate(kvp.Value))
             {
                 _queue.Remove(kvp.Key, out _);
                 ReleaseId(kvp.Key);
+                removed++;
             }
         }
+        if (removed > 0)
+            s_logger.Debug("TaskManager removed {0} tasks via predicate", removed);
     }
     private uint NextId()
     {

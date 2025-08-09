@@ -351,6 +351,19 @@ public class Skill
 
             unit.SkillTask = new CastTask(this, caster, casterCaster, target, targetCaster, skillObject);
             TaskManager.Instance.Schedule(unit.SkillTask, TimeSpan.FromMilliseconds(castTime));
+
+            // Watchdog: if the scheduled cast doesn't execute on time, force-dispatch it
+            try
+            {
+                var watchdog = new CastWatchdogTask(this, caster, casterCaster, target, targetCaster, skillObject, TlId);
+                var wdDelay = castTime + 300;
+                Logger.Debug("Skill.Use scheduled CastWatchdog: skill={0}, tlId={1}, inMs={2}", Template?.Id, TlId, wdDelay);
+                TaskManager.Instance.Schedule(watchdog, TimeSpan.FromMilliseconds(wdDelay));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Skill.Use failed to schedule watchdog for skill {0}: {1}", Template?.Id, e.Message);
+            }
         }
         else
         {

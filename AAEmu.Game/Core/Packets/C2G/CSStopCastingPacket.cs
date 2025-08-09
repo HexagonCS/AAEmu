@@ -42,6 +42,13 @@ public class CSStopCastingPacket : GamePacket
             return;
         }
 
+        var st = Connection.ActiveChar.SkillTask;
+        if (st != null)
+        {
+            Logger.Debug("StopCasting requested: char={0}, tlId={1}, plotTlId={2}, skill={3}, triggerAt={4:O}, now={5:O}",
+                Connection.ActiveChar.Name, tlId, plotTlId, st.Skill?.Template?.Id, st.TriggerTime, DateTime.UtcNow);
+        }
+
         Connection.ActiveChar.SkillTask.Cancel();
 
         if (Connection.ActiveChar.SkillTask is EndChannelingTask ect)
