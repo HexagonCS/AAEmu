@@ -75,9 +75,24 @@ public abstract class BaiReader : IDisposable
         // Do nothing
     }
 
+    private bool _disposed;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        if (disposing)
+        {
+            // dispose managed state
+            Close();
+        }
+        // no unmanaged resources to free
+        _disposed = true;
+    }
+
     public void Dispose()
     {
-        Close();
+        Dispose(true);
+        GC.SuppressFinalize(this);
     }
 
     /// <summary>

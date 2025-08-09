@@ -4,6 +4,8 @@ using AAEmu.Commons.IO;
 using Microsoft.Data.Sqlite;
 using NLog;
 
+#nullable enable
+
 namespace AAEmu.Game.Utils.DB;
 
 public static class SchemaInspector
@@ -182,7 +184,7 @@ public static class SchemaInspector
         WriteMarkdown(snapshot, outDir);
     }
 
-    private static IEnumerable<(T left, T right)> Pairwise<T>(IReadOnlyList<T> items)
+    private static IEnumerable<(T left, T right)> Pairwise<T>(List<T> items)
     {
         for (int i = 0; i < items.Count; i++)
             for (int j = i + 1; j < items.Count; j++)
@@ -212,7 +214,7 @@ public static class SchemaInspector
         return fuzzy.Count > 0 ? fuzzy : Array.Empty<string>();
     }
 
-    private static IEnumerable<string> VerifyCandidates(SqliteConnection conn, string table, string column, IEnumerable<string> candidates)
+    private static List<string> VerifyCandidates(SqliteConnection conn, string table, string column, IEnumerable<string> candidates)
     {
         var list = candidates.ToList();
         if (list.Count == 0)

@@ -176,6 +176,7 @@ public class LootPack
     public List<(uint itemId, int count, byte grade, uint lootGroupOrigin)> GeneratePackNewV2(float lootDropRate, float lootGoldRate, Character player, ActabilityType actabilityType)
     {
         var items = new List<(uint itemId, int count, byte grade, uint lootGroupOrigin)>();
+        Logger.Info($"Loot debug: LootPack={Id} start lootDropRate={lootDropRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, lootGoldRate={lootGoldRate:F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}");
 
         foreach (var (groupNo, groupLootList) in LootsByGroupNo)
         {

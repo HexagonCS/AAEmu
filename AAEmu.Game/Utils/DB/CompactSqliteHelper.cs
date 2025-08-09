@@ -2,6 +2,8 @@ using AAEmu.Commons.IO;
 using Microsoft.Data.Sqlite;
 using NLog;
 
+#nullable enable
+
 namespace AAEmu.Game.Utils.DB;
 
 /// <summary>
@@ -137,4 +139,3 @@ public static class CompactSqliteHelper
 
     public readonly record struct TableSummary(string Table, int ColumnCount, long RowCount);
 }
-

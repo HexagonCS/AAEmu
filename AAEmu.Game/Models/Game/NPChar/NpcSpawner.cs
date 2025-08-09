@@ -344,7 +344,7 @@ public class NpcSpawner : Spawner<Npc>
 
             if (SpawnerId != spawnerId)
             {
-                if (spawnerTemplate is { StartTime: > 0.0f, EndTime: > 0.0f } || CheckGameScheduleStatus())
+                if ((spawnerTemplate.StartTime > 0.0f && spawnerTemplate.EndTime > 0.0f) || CheckGameScheduleStatus())
                 {
                     //Logger.Debug($"[Spawn SpawnerId={SpawnerId}] имеет другой спавнер SpawnerId={spawnerId} с расписанием спавна.");
                     result = true;
@@ -352,7 +352,7 @@ public class NpcSpawner : Spawner<Npc>
             }
             if (SpawnerId == spawnerId)
             {
-                if (spawnerTemplate is { StartTime: > 0.0f, EndTime: > 0.0f } || CheckGameScheduleStatus())
+                if ((spawnerTemplate.StartTime > 0.0f && spawnerTemplate.EndTime > 0.0f) || CheckGameScheduleStatus())
                 {
                     //Logger.Debug($"[Spawn SpawnerId={SpawnerId}] имеет расписание спавна.");
                     return true;

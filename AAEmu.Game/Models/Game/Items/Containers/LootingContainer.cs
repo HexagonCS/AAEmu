@@ -13,6 +13,7 @@ using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Models.Game.Team;
 using AAEmu.Game.Models.Game.Units;
 using NLog;
+using AAEmu.Game.Models; // For AppConfiguration
 
 namespace AAEmu.Game.Models.Game.Items.Containers;
 
@@ -166,6 +167,7 @@ public class LootingContainer(IBaseUnit owner)
                 {
                     var aggroDropMul = (100f + pl.DropRateMul) / 100f;
                     var aggroGoldMul = (100f + pl.LootGoldMul) / 100f;
+                    Logger.Info($"Loot debug: candidate {pl.Name} DropRateMul={pl.DropRateMul:F2} => {aggroDropMul:F2}, LootGoldMul={pl.LootGoldMul:F2} => {aggroGoldMul:F2}");
                     if (aggroDropMul > maxDropRateMul)
                         maxDropRateMul = aggroDropMul;
                     if (aggroGoldMul > maxLootGoldMul)
@@ -175,6 +177,7 @@ public class LootingContainer(IBaseUnit owner)
 
                 lootDropRate = maxDropRateMul;
                 lootGoldRate = maxLootGoldMul;
+                Logger.Info($"Loot debug: eligible players={EligiblePlayers.Count}, selected lootDropRate={lootDropRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, lootGoldRate={lootGoldRate:F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}");
             }
             else if (killer is Character player)
             {
@@ -182,6 +185,7 @@ public class LootingContainer(IBaseUnit owner)
                 lootDropRate *= (100f + player.DropRateMul) / 100f;
                 lootGoldRate *= (100f + player.LootGoldMul) / 100f;
                 Logger.Info($"Unit killed without aggro: {npc.ObjId} ({npc.TemplateId}) by {player.Name}");
+                Logger.Info($"Loot debug: fallback killer={player.Name}, DropRateMul={player.DropRateMul:F2} => {lootDropRate:F2}, LootGoldMul={player.LootGoldMul:F2} => {lootGoldRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}");
                 EligiblePlayers.Add(player);
             }
 
@@ -195,6 +199,7 @@ public class LootingContainer(IBaseUnit owner)
                 var lootPack = LootGameData.Instance.GetPack(lootPackDropping.LootPackId);
                 if (lootPack == null)
                     continue;
+                Logger.Info($"Loot debug: generating LootPack={lootPack.Id} for NPC={npc.TemplateId} with lootDropRate={lootDropRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, lootGoldRate={lootGoldRate:F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}");
                 lootPackResults.AddRange(lootPack.GeneratePackNewV2(lootDropRate, lootGoldRate, killer as Character, ActabilityType.None));
                 // var items = lootPack.GenerateNpcPackItems(ref baseId, killer, lootDropRate, lootGoldRate);
                 // RegisterItems(items);
