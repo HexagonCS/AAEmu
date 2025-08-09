@@ -1315,6 +1315,18 @@ public partial class Character : Unit, ICharacter
         }
     }
 
+    [UnitAttribute(UnitAttribute.LootItemCountMul)]
+    public float LootItemCountMul
+    {
+        get
+        {
+            double res = 0.0;
+            // Sum of VALUE-type bonuses; interpret as percent offset (100 = +100%)
+            res = CalculateWithBonuses(res, UnitAttribute.LootItemCountMul);
+            return (float)res;
+        }
+    }
+
     #endregion
 
     /// <summary>

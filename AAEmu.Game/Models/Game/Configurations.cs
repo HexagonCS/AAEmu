@@ -9,8 +9,8 @@ public class Configurations : PacketMarshaler
     public string Value { get; set; }
 }
 
-public class WorldConfig
-{
+    public class WorldConfig
+    {
     /// <summary>
     /// Message of the Day that gets displayed in player's chat upon login
     /// </summary>
@@ -95,8 +95,13 @@ public class WorldConfig
     /// <summary>
     /// Server-side Actability Points multiplier (on top of buffs)
     /// </summary>
-    public double ActabilityRate { get; set; } = 1.0;
-}
+        public double ActabilityRate { get; set; } = 1.0;
+
+        /// <summary>
+        /// Global multiplier for non-coin loot item counts (applies on top of buffs)
+        /// </summary>
+        public double LootItemCountRate { get; set; } = 1.0;
+    }
 
 public class DungeonLoadConfig
 {

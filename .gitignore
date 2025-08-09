@@ -27,3 +27,5 @@ dotnet-install.sh
 packages-microsoft-prod.deb
 /Exported Game Pak/
 /DecompiledPak/
+sqlite3.*
+AAEmu.Game/Data/compact.sqlite3.*

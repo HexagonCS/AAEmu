@@ -85,6 +85,14 @@ Build copy behavior and verification
     - Vocation gain: `unit_modifiers(owner_type='Buff', owner_id=8000010, unit_attribute_id=137, value=10)`
     - Production time: `skill_modifiers(owner_type='Buff', owner_id=8000010, skill_attribute_id=4, unit_modifier_type_id=1, value=-10)`
 
+New attribute (loot amount multiplier)
+- Purpose: multiply non-coin loot item counts by x*(1+y), where `y` is the effect value interpreted as percent/100.
+- Server attribute: `UnitAttribute.LootItemCountMul = 187`.
+- Semantics: values are VALUE-type and represent percent offset; use `value=100` for +100% (2x items), `value=50` for +50% (1.5x), etc.
+- Example (Lucky Quicksilver Tonic): add a row to `unit_modifiers` for its buff id:
+  - `unit_modifiers(owner_type='Buff', owner_id=<buff_id>, unit_attribute_id=187, unit_modifier_type_id=0, value=100)`
+  - Effect applies to NPC drops and loot from doodads/skills that use loot packs; coins follow gold multipliers, not this effect.
+
 ### Production-Time Reduction (cast-time and timers)
 - Concept: “Decrease production time” is modeled as cast-time reductions on relevant skills and as reductions on pure timers.
 - Tags: Tag id `1157` denotes “Decrease production time”. Skills associated with production/gathering are tagged with `1157` (see `tagged_skills`).

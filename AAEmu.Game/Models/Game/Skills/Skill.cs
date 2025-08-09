@@ -92,6 +92,10 @@ public class Skill
 
         unit.ConditionChance = true;
 
+        Logger.Debug(
+            "Skill.Use start: skill={0}, caster={1}, casterType={2}, targetType={3}, bypassGcd={4}",
+            Template?.Id, caster?.ObjId, casterCaster?.Type, targetCaster?.Type, bypassGcd);
+
         var requirementResult = UnitRequirementsGameData.Instance.CanUseSkill(Template, caster, casterCaster);
         if (requirementResult.ResultKey != SkillResultKeys.ok)
         {
@@ -100,6 +104,10 @@ public class Skill
             Cancelled = true;
             skillResultValueUInt = requirementResult.ResultUInt;
             return SkillResultHelper.SkillResultErrorKeyToId(requirementResult.ResultKey);
+        }
+        else
+        {
+            Logger.Debug("Skill.Use requirements ok: skill={0}", Template?.Id);
         }
 
         _bypassGcd = bypassGcd;
@@ -162,6 +170,10 @@ public class Skill
             }
             Logger.Trace($"Skill: SkillResult.NoTarget! - Skill {Template.Id}, Caster {caster.Name} ({caster.ObjId})");
             return SkillResult.NoTarget; // We should try to make sure this doesn't happen, but can happen with NPC skills
+        }
+        else
+        {
+            Logger.Debug("Skill.Use target resolved: skill={0}, target={1}", Template?.Id, target.ObjId);
         }
 
         // Unmount character if skill asks for it
@@ -296,6 +308,7 @@ public class Skill
             var baseCast = Template.CastingTime;
             var modified = unit.SkillModifiersCache.ApplyModifiers(this, SkillAttribute.CastTime, baseCast);
             castTime = (int)(unit.CastTimeMul * modified);
+            Logger.Debug("Skill.Use cast time: skill={0}, base={1}, modified={2}, final={3}", Template?.Id, baseCast, modified, castTime);
             try
             {
                 // Debug trace for production-time reductions
@@ -329,6 +342,7 @@ public class Skill
         if (castTime > 0)
         {
             // Has casting time, schedule a task for it
+            Logger.Debug("Skill.Use sending SCSkillStarted: skill={0}, tlId={1}, baseDiv10={2}, realDiv10={3}", Template?.Id, TlId, (ushort)(castTime / 10), (ushort)(castTime / 10));
             caster.BroadcastPacket(new SCSkillStartedPacket(Id, TlId, casterCaster, targetCaster, this, skillObject)
             {
                 BaseCastTimeDiv10 = (ushort)(castTime / 10),
@@ -341,6 +355,7 @@ public class Skill
         else
         {
             // Immediate skill
+            Logger.Debug("Skill.Use immediate cast path: skill={0}, tlId={1}", Template?.Id, TlId);
             Cast(caster, casterCaster, target, targetCaster, skillObject);
         }
 
@@ -589,6 +604,7 @@ public class Skill
     public void Cast(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject)
     {
         if (caster is not Unit unit) { return; }
+        Logger.Debug("Skill.Cast enter: skill={0}, tlId={1}, caster={2}, target={3}", Template?.Id, TlId, caster?.ObjId, targetCaster?.ObjId);
 
         if (!_bypassGcd)
         {
@@ -597,6 +613,7 @@ public class Skill
                 gcd = caster is Npc ? 1500 : 1000;
 
             unit.GlobalCooldown = DateTime.UtcNow.AddMilliseconds(gcd * (unit.GlobalCooldownMul / 100));
+            Logger.Trace("Skill.Cast set GCD: skill={0}, gcdMs={1}", Template?.Id, gcd * (unit.GlobalCooldownMul / 100));
         }
 
         if (caster is Npc && Template.SkillControllerId != 0)
@@ -636,8 +653,10 @@ public class Skill
         }
         unit.SkillTask = null;
 
+        Logger.Trace("Skill.Cast consume mana: skill={0}, cost={1}", Template?.Id, ManaCost(unit));
         ConsumeMana(caster);
         unit.Cooldowns.AddCooldown(Template.Id, (uint)Template.CooldownTime);
+        Logger.Trace("Skill.Cast add cooldown: skill={0}, cdMs={1}", Template?.Id, Template.CooldownTime);
 
         // if (Id == 2 || Id == 3 || Id == 4)
         // {
@@ -686,7 +705,7 @@ public class Skill
         //     }
         // }
 
-        // Validate cast Item
+        // Validate cast Item (ensure ending skill if invalid)
         if (caster is Character player && casterCaster is SkillItem castItem)
         {
             var castItemTemplate = ItemManager.Instance.GetTemplate(castItem.ItemTemplateId);
@@ -695,14 +714,16 @@ public class Skill
                 var useItem = ItemManager.Instance.GetItemByItemId(castItem.ItemId);
                 if (useItem == null)
                 {
-                    Logger.Warn("SkillItem does not exists {0} (templateId: {1})", castItem.ItemId, castItem.ItemTemplateId);
-                    return; // Item does not exists
+                    Logger.Warn("SkillItem does not exist {0} (templateId: {1})", castItem.ItemId, castItem.ItemTemplateId);
+                    EndSkill(caster);
+                    return; // Item does not exist; end skill to avoid hanging
                 }
 
                 if (useItem._holdingContainer.OwnerId != player.Id)
                 {
                     Logger.Warn("SkillItem {0} (itemId:{1}) is not owned by player {2} ({3})", useItem.Template.Name, useItem.Id, player.Name, player.Id);
-                    return; // Item is not in the player's possessions
+                    EndSkill(caster);
+                    return; // Item is not in the player's possessions; end skill to avoid hanging
                 }
 
                 var itemCount = player.Inventory.GetItemsCount(useItem.TemplateId);
@@ -710,17 +731,20 @@ public class Skill
                 if (itemCount < itemsRequired)
                 {
                     Logger.Warn("SkillItem, player does not own enough of {0} (count: {1}/{2}, templateId: {3})", useItem.Id, itemCount, itemsRequired, castItem.ItemTemplateId);
-                    return; // not enough of item
+                    EndSkill(caster);
+                    return; // not enough of item; end skill to avoid hanging
                 }
             }
         }
 
         if (Template.ChannelingTime > 0)
         {
+            Logger.Debug("Skill.Cast start channeling: skill={0}, tlId={1}, ms={2}", Template?.Id, TlId, Template.ChannelingTime);
             StartChanneling(caster, casterCaster, target, targetCaster, skillObject);
         }
         else
         {
+            Logger.Debug("Skill.Cast schedule effects: skill={0}, tlId={1}", Template?.Id, TlId);
             ScheduleEffects(caster, casterCaster, target, targetCaster, skillObject);
         }
     }
@@ -748,6 +772,7 @@ public class Skill
     public void StartChanneling(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject)
     {
         if (caster is not Unit unit) { return; }
+        Logger.Debug("Skill.StartChanneling: skill={0}, tlId={1}", Template?.Id, TlId);
         if (Template.ChannelingBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ChannelingBuffId);
@@ -777,6 +802,7 @@ public class Skill
     public void EndChanneling(BaseUnit caster, Doodad channelDoodad, SkillCaster casterCaster)
     {
         if (caster is not Unit unit) { return; }
+        Logger.Debug("Skill.EndChanneling: skill={0}, tlId={1}", Template?.Id, TlId);
         unit.SkillTask = null;
         if (Template.ChannelingBuffId != 0)
         {
@@ -804,6 +830,7 @@ public class Skill
     public void ScheduleEffects(BaseUnit caster, SkillCaster casterCaster, BaseUnit target, SkillCastTarget targetCaster, SkillObject skillObject)
     {
         if (caster is not Unit unit) { return; }
+        Logger.Debug("Skill.ScheduleEffects begin: skill={0}, tlId={1}", Template?.Id, TlId);
         if (Template.ToggleBuffId != 0)
         {
             var buff = SkillManager.Instance.GetBuffTemplate(Template.ToggleBuffId);
@@ -822,16 +849,29 @@ public class Skill
         {
             ComputedDelay = (short)totalDelay
         }, true);
+        Logger.Debug("Skill.Fired: skill={0}, tlId={1}, computedDelayMs={2}", Template?.Id, TlId, totalDelay);
 
         if (totalDelay > 0)
         {
             var thisSkillTask = new ApplySkillTask(this, caster, casterCaster, target, targetCaster, skillObject);
             TaskManager.Instance.Schedule(thisSkillTask, TimeSpan.FromMilliseconds(totalDelay));
+            Logger.Debug("Skill.ScheduleEffects scheduled ApplySkillTask: skill={0}, tlId={1}, inMs={2}", Template?.Id, TlId, totalDelay);
         }
         else
         {
-            ApplyEffects(caster, casterCaster, target, targetCaster, skillObject);
-            EndSkill(caster);
+            try
+            {
+                ApplyEffects(caster, casterCaster, target, targetCaster, skillObject);
+            }
+            catch (Exception e)
+            {
+                // Guard against hangs if immediate application throws
+                Logger.Error("ScheduleEffects immediate apply exception for skill {0}: {1}\n{2}", Template?.Id, e.Message, e.StackTrace);
+            }
+            finally
+            {
+                EndSkill(caster);
+            }
         }
     }
 
@@ -847,6 +887,7 @@ public class Skill
             return;
         var player = caster as Character;
         var possibleTargets = new List<BaseUnit>(); // TODO crutches
+        Logger.Debug("Skill.ApplyEffects begin: skill={0}, tlId={1}", Template?.Id, TlId);
         // Get a list of all possible targets
         if (Template.TargetSiege && Template.TargetSelection == SkillTargetSelection.Source && caster is Slave)
         {
@@ -877,6 +918,7 @@ public class Skill
             possibleTargets.Add(caster);
         }
 
+        Logger.Debug("Skill.ApplyEffects targets resolved: count={0}, effects={1}", possibleTargets.Count, Template.Effects.Count);
         foreach (var target in possibleTargets)
         {
             if (target is Unit targetUnit && Template.TargetType == SkillTargetType.Hostile)
@@ -1029,6 +1071,7 @@ public class Skill
                 }
 
                 // Apply the effect
+                Logger.Trace("Skill.ApplyEffects queued effect: skill={0}, effectId={1}, target={2}", Template?.Id, effect.EffectId, target.ObjId);
                 effectsToApply.Add((target, effect));
                 lastAppliedEffect = effect;
                 //effect.Template?.Apply(caster, casterCaster, target, targetCaster, new CastSkill(Template.Id, TlId), new EffectSource(this), skillObject, DateTime.UtcNow, packets);
@@ -1167,6 +1210,7 @@ public class Skill
                     ? targetCaster
                     : new SkillCastUnitTarget(target.ObjId);
 
+                Logger.Trace("Skill.ApplyEffects applying effect: skill={0}, effectId={1}, target={2}", Template?.Id, effect.EffectId, target.ObjId);
                 if (effect.Template is KillNpcWithoutCorpseEffect nsse)
                 {
                     // для квеста 3478, требуется чтобы caster был Npc
@@ -1279,6 +1323,7 @@ public class Skill
     {
         if (caster is not Unit unit)
             return;
+        Logger.Debug("Skill.EndSkill: skill={0}, tlId={1}, cancelled={2}", Template?.Id, TlId, Cancelled);
 
         if (caster is Character character)
         {

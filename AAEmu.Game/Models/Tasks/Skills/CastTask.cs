@@ -24,7 +24,18 @@ public class CastTask : SkillTask
     {
         if (Skill.Cancelled)
             return;
-
-        Skill.Cast(_caster, _casterCaster, _target, _targetCaster, _skillObject);
+        try
+        {
+            NLog.LogManager.GetCurrentClassLogger().Debug(
+                "CastTask start: skill={0}, tlId={1}, caster={2}, target={3}",
+                Skill?.Template?.Id, Skill?.TlId, _caster?.ObjId, _targetCaster?.ObjId);
+            Skill.Cast(_caster, _casterCaster, _target, _targetCaster, _skillObject);
+        }
+        catch (Exception e)
+        {
+            // Do not leave the cast hanging if something goes wrong
+            NLog.LogManager.GetCurrentClassLogger().Error("CastTask exception for skill {0}: {1}\n{2}", Skill?.Template?.Id, e.Message, e.StackTrace);
+            try { Skill.EndSkill(_caster); } catch { /* best effort */ }
+        }
     }
 }

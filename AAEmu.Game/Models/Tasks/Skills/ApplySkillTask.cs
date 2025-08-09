@@ -24,7 +24,21 @@ public class ApplySkillTask : Task
 
     public override void Execute()
     {
-        _skill.ApplyEffects(_caster, _casterCaster, _target, _targetCaster, _skillObject);
-        _skill.EndSkill(_caster);
+        try
+        {
+            NLog.LogManager.GetCurrentClassLogger().Debug(
+                "ApplySkillTask start: skill={0}, tlId={1}, caster={2}, target={3}",
+                _skill?.Template?.Id, _skill?.TlId, _caster?.ObjId, _targetCaster?.ObjId);
+            _skill.ApplyEffects(_caster, _casterCaster, _target, _targetCaster, _skillObject);
+        }
+        catch (Exception e)
+        {
+            // Ensure the client is not left hanging if an effect application throws
+            NLog.LogManager.GetCurrentClassLogger().Error("ApplySkillTask exception for skill {0}: {1}\n{2}", _skill?.Template?.Id, e.Message, e.StackTrace);
+        }
+        finally
+        {
+            _skill.EndSkill(_caster);
+        }
     }
 }

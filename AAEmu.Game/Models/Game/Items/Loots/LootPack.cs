@@ -31,7 +31,8 @@ public class LootPack
     {
         var lootDropRate = (100f + player.DropRateMul) / 100f;
         var lootGoldRate = (100f + player.LootGoldMul) / 100f;
-        return GeneratePackNewV2(lootDropRate, lootGoldRate, player, actabilityType);
+        var lootItemCountMul = (100f + player.LootItemCountMul) / 100f;
+        return GeneratePackNewV2(lootDropRate, lootGoldRate, lootItemCountMul, player, actabilityType);
     }
 
     /// <summary>
@@ -155,6 +156,12 @@ public class LootPack
                 // Multiply gold as needed
                 if (selectedPack.ItemId == Item.Coins)
                     lootCount = (int)Math.Round(lootCount * (lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier));
+                else if (player is Character c)
+                {
+                    // Multiply non-coin item counts by player's LootItemCountMul (percent-based)
+                    var itemCountMul = (100f + c.LootItemCountMul) / 100f;
+                    lootCount = (int)Math.Round(lootCount * itemCountMul * (float)AppConfiguration.Instance.World.LootItemCountRate);
+                }
 
                 items.Add((selectedPack.ItemId, lootCount, grade));
             }
@@ -173,10 +180,10 @@ public class LootPack
     /// <param name="player">The player the loot is generated for, currently only used to handle exclusions</param>
     /// <param name="actabilityType">AbilityType used to initiate the loot generation (used to calculate bonus)</param>
     /// <returns></returns>
-    public List<(uint itemId, int count, byte grade, uint lootGroupOrigin)> GeneratePackNewV2(float lootDropRate, float lootGoldRate, Character player, ActabilityType actabilityType)
+    public List<(uint itemId, int count, byte grade, uint lootGroupOrigin)> GeneratePackNewV2(float lootDropRate, float lootGoldRate, float lootItemCountMul, Character player, ActabilityType actabilityType)
     {
         var items = new List<(uint itemId, int count, byte grade, uint lootGroupOrigin)>();
-        Logger.Info($"Loot debug: LootPack={Id} start lootDropRate={lootDropRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, lootGoldRate={lootGoldRate:F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}");
+        Logger.Info($"Loot debug: LootPack={Id} start lootDropRate={lootDropRate:F2}, worldLootRate={AppConfiguration.Instance.World.LootRate:F2}, effective={(lootDropRate * AppConfiguration.Instance.World.LootRate):F2}, lootGoldRate={lootGoldRate:F2}, goldEff={(lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier):F2}, itemCountMul={lootItemCountMul:F2}, worldItemCountRate={AppConfiguration.Instance.World.LootItemCountRate:F2}");
 
         foreach (var (groupNo, groupLootList) in LootsByGroupNo)
         {
@@ -308,6 +315,8 @@ public class LootPack
                     // Item Coin
                     if (loot.ItemId == Item.Coins)
                         countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate * AppConfiguration.Instance.World.GoldLootMultiplier);
+                    else
+                        countToAddNow = (int)Math.Round(countToAddNow * lootItemCountMul * (float)AppConfiguration.Instance.World.LootItemCountRate);
                     // Choose grade
                     var generatedGrade = loot.GradeId;
                     if (group?.ItemGradeDistributionId > 0)
@@ -333,6 +342,8 @@ public class LootPack
     public List<(uint itemId, int count, byte grade, uint lootGroupOrigin)> GeneratePackNew(float lootDropRate, float lootGoldRate, Character player, ActabilityType actabilityType, bool doNotPreFilter)
     {
         var items = new List<(uint itemId, int count, byte grade, uint lootGroupOrigin)>();
+        var lootItemCountMul = player != null ? (100f + player.LootItemCountMul) / 100f : 1f;
+        lootItemCountMul *= (float)AppConfiguration.Instance.World.LootItemCountRate;
 
         foreach (var (groupNo, groupLootList) in LootsByGroupNo)
         {
@@ -414,6 +425,8 @@ public class LootPack
                         // Check for gold multiplier
                         if (loot.ItemId == Item.Coins)
                             countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate);
+                        else
+                            countToAddNow = (int)Math.Round(countToAddNow * lootItemCountMul * (float)AppConfiguration.Instance.World.LootItemCountRate);
                         var generatedGrade = loot.GradeId;
                         if (group?.ItemGradeDistributionId > 0)
                         {
@@ -433,6 +446,8 @@ public class LootPack
                     // Check for gold multiplier
                     if (loots[rngItem].ItemId == Item.Coins)
                         countToAdd = (int)Math.Round(countToAdd * lootGoldRate);
+                    else
+                        countToAdd = (int)Math.Round(countToAdd * lootItemCountMul * (float)AppConfiguration.Instance.World.LootItemCountRate);
                     var generatedGrade = loots[rngItem].GradeId;
                     if (group?.ItemGradeDistributionId > 0)
                     {
@@ -452,6 +467,8 @@ public class LootPack
                         // Check for gold multiplier
                         if (loot.ItemId == Item.Coins)
                             countToAddNow = (int)Math.Round(countToAddNow * lootGoldRate);
+                        else
+                            countToAddNow = (int)Math.Round(countToAddNow * lootItemCountMul * (float)AppConfiguration.Instance.World.LootItemCountRate);
                         var generatedGrade = loot.GradeId;
                         if (group?.ItemGradeDistributionId > 0)
                         {

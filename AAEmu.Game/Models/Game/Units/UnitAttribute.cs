@@ -169,4 +169,6 @@ public enum UnitAttribute : byte
     MagicPenetration = 184,
     HealCriticalMul = 185,
     ExpByLaborPowerMul = 186,
+    // Multiplies non-coin loot item counts (Value is treated as percent; 100 = +100% = 2x)
+    LootItemCountMul = 187,
 }
