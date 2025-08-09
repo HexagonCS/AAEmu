@@ -39,6 +39,13 @@ public partial class QuestManager
                 Selected = selected,
                 Transform = npc.Transform
             });
+
+            // Ensure prompt evaluation after report
+            if (owner.Quests.ActiveQuests.TryGetValue(questContextId, out var questNpc))
+            {
+                Logger.Info($"DoReportEvents(Npc): Enqueue after report, {owner.Name} ({owner.Id}), Quest {questContextId}, NpcObjId {npcObjId}, NpcId {npc.TemplateId}, Selected {selected}");
+                EnqueueEvaluation(questNpc);
+            }
         }
         else if (doodadObjId > 0)
         {
@@ -57,6 +64,13 @@ public partial class QuestManager
                 Selected = selected,
                 Transform = doodad.Transform
             });
+
+            // Ensure prompt evaluation after report
+            if (owner.Quests.ActiveQuests.TryGetValue(questContextId, out var questDoodad))
+            {
+                Logger.Info($"DoReportEvents(Doodad): Enqueue after report, {owner.Name} ({owner.Id}), Quest {questContextId}, DoodadObjId {doodadObjId}, DoodadId {doodad.TemplateId}, Selected {selected}");
+                EnqueueEvaluation(questDoodad);
+            }
         }
         else
         {
@@ -66,6 +80,8 @@ public partial class QuestManager
             {
                 quest.SelectedRewardIndex = selected;
                 quest.Step = QuestComponentKind.Reward;
+                Logger.Info($"DoReportEvents(Auto): Set Reward step and enqueue, {owner.Name} ({owner.Id}), Quest {questContextId}, Selected {selected}");
+                EnqueueEvaluation(quest);
             }
         }
     }

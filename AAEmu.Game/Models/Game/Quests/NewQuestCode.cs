@@ -147,6 +147,7 @@ public partial class Quest
 
                     Owner.Quests.DropQuest(TemplateId, false, false);
                     Owner.SendPacket(new SCQuestContextCompletedPacket(TemplateId, body, 0));
+                    Logger.Info($"Quest completed and packet sent, Quest:{TemplateId}, Player:{Owner.Name} ({Owner.Id})");
 
                     return;
                 default:

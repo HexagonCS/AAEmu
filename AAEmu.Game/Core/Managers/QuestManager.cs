@@ -44,6 +44,7 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
     public Dictionary<uint, Dictionary<uint, QuestTimeoutTask>> QuestTimeoutTask { get; } = [];
     private Queue<Quest> EvaluationQueue { get; } = new();
     private readonly object _evaluationQueueLock = new();
+    private volatile bool _runnerInFlight;
 
     /// <summary>
     /// Gets the Template of a Quest by TemplateId
@@ -138,17 +139,14 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
     {
         lock (_evaluationQueueLock)
         {
-            var needNewTask = EvaluationQueue.Count <= 0;
             if (!EvaluationQueue.Contains(quest))
                 EvaluationQueue.Enqueue(quest);
 
             Logger.Info($"EnqueueEvaluation, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
 
-            if (needNewTask)
+            // Kick a single-shot runner if none is currently in flight.
+            if (!_runnerInFlight)
             {
-                // Schedule a single-shot evaluation run shortly after enqueueing.
-                // Using a small startDelay avoids executing immediately while holding this lock
-                // and does not rely on a long-lived repeating task.
                 TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
             }
         }
@@ -159,15 +157,63 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
     /// </summary>
     public void DoQueuedEvaluations()
     {
+        // Acquire permission to run if there is work and no runner is in flight.
+        var canRun = false;
+        int queued = 0;
         lock (_evaluationQueueLock)
         {
-            while (EvaluationQueue.Count > 0)
+            queued = EvaluationQueue.Count;
+            if (!_runnerInFlight && queued > 0)
             {
-                var quest = EvaluationQueue.Dequeue();
-                quest.StartingEvaluation();
-                Logger.Info($"DoQueuedEvaluations, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
-                var currentResult = quest.RunCurrentStep();
+                _runnerInFlight = true;
+                canRun = true;
             }
+        }
+
+        if (!canRun)
+            return;
+
+        try
+        {
+            Logger.Info($"DoQueuedEvaluations start: queued={queued}, inFlight=true");
+            while (true)
+            {
+                Quest quest = null;
+                lock (_evaluationQueueLock)
+                {
+                    if (EvaluationQueue.Count > 0)
+                        quest = EvaluationQueue.Dequeue();
+                    else
+                        break;
+                }
+
+                try
+                {
+                    quest.StartingEvaluation();
+                    Logger.Info($"DoQueuedEvaluations, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
+                    _ = quest.RunCurrentStep();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, $"Quest evaluation failed. Player:{quest?.Owner?.Name} ({quest?.Owner?.Id}), Quest:{quest?.TemplateId}");
+                    // Continue with the next quest; one bad quest must not block the queue.
+                }
+            }
+        }
+        finally
+        {
+            // Release runner and, if more work appeared, kick a follow-up single-shot run.
+            var hasMore = false;
+            lock (_evaluationQueueLock)
+            {
+                _runnerInFlight = false;
+                hasMore = EvaluationQueue.Count > 0;
+                queued = EvaluationQueue.Count;
+            }
+
+            Logger.Info($"DoQueuedEvaluations end: queued={queued}, inFlight=false, reschedule={(hasMore ? 1 : 0)}");
+            if (hasMore)
+                TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
         }
     }
 
@@ -265,6 +311,9 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
         var dailyCron = "0 0 0 */1 * *"; // Crontab
         // TODO: Make sure it obeys server time settings
         TaskManager.Instance.CronSchedule(new QuestDailyResetTask(), dailyCron);
+
+        // Start a lightweight watchdog to ensure the evaluation queue is drained even after errors.
+        TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     }
 
     /// <summary>
