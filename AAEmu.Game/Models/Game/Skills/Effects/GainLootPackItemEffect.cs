@@ -35,14 +35,19 @@ public class GainLootPackItemEffect : EffectTemplate
         if (pack == null || pack.Loots.Count <= 0)
             return;
 
-        // TODO: Find the related ActAbility
+        // TODO: Find the related ActAbility (for openings we keep None/Quest)
         var actAbility = ActabilityType.None;
+
+        // For "opening" contexts, we want to disable item-count scaling
+        var lootDropRate = (100f + character.DropRateMul) / 100f;
+        var lootGoldRate = (100f + character.LootGoldMul) / 100f;
 
         if (!ConsumeSourceItem && ConsumeCount == 0)
         {
             // the tractor collects water
             character.Inventory.Bag.ConsumeItem(ItemTaskType.ConsumeSkillSource, ConsumeItemId, ConsumeCount, null);
-            pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem);
+            var generated = pack.GeneratePackNewV2(lootDropRate, lootGoldRate, 1.0f, character, actAbility, applyItemCountScaling: false);
+            pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem, generated);
             Logger.Debug($"GainLootPackItemEffect {LootPackId}");
             return;
         }
@@ -66,8 +71,11 @@ public class GainLootPackItemEffect : EffectTemplate
             character.Inventory.Bag.ConsumeItem(ItemTaskType.ConsumeSkillSource, ConsumeItemId, ConsumeCount, null);
         }
 
-        // Give the results
-        pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem);
+        // Give the results (with item-count scaling disabled for openings)
+        {
+            var generated = pack.GeneratePackNewV2(lootDropRate, lootGoldRate, 1.0f, character, actAbility, applyItemCountScaling: false);
+            pack.GiveLootPack(character, actAbility, ItemTaskType.SkillEffectGainItem, generated);
+        }
 
         Logger.Debug($"GainLootPackItemEffect {LootPackId}");
     }

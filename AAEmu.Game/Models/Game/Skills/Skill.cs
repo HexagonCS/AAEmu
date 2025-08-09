@@ -47,6 +47,9 @@ public class Skill
     public bool Cancelled { get; set; } = false;
     public Action Callback { get; set; }
 
+    // Fallback for cast scheduling when TaskManager stalls
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ushort, System.Threading.CancellationTokenSource> _castFallbacks = new();
+
     //public bool isAutoAttack;
     //public SkillTask autoAttackTask;
 
@@ -364,6 +367,71 @@ public class Skill
             {
                 Logger.Warn("Skill.Use failed to schedule watchdog for skill {0}: {1}", Template?.Id, e.Message);
             }
+
+            // Async fallback independent of TaskManager: runs after castTime+500ms
+            try
+            {
+                var tlIdSnapshot = TlId;
+                var cts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    _castFallbacks[tlIdSnapshot] = cts;
+                    var delayMs = castTime + 500;
+                    Logger.Debug("Skill.Use scheduled async fallback: skill={0}, tlId={1}, inMs={2}", Template?.Id, tlIdSnapshot, delayMs);
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await System.Threading.Tasks.Task.Delay(delayMs, cts.Token).ConfigureAwait(false);
+                        }
+                        catch (System.OperationCanceledException)
+                        {
+                            return; // cancelled normally
+                        }
+
+                        try
+                        {
+                            if (caster is not Unit unit)
+                                return;
+                            // Only fire if still pending for this tlId
+                            if (Cancelled)
+                                return;
+                            var pending = unit.SkillTask as CastTask;
+                            if (pending?.Skill?.TlId == tlIdSnapshot)
+                            {
+                                Logger.Warn("Skill fallback firing overdue cast: skill={0}, tlId={1}, caster={2}", Template?.Id, tlIdSnapshot, unit.ObjId);
+                                Cast(caster, casterCaster, target, targetCaster, skillObject);
+                            }
+                            else
+                            {
+                                Logger.Debug("Skill fallback no-op: tlId={0} not pending", tlIdSnapshot);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error("Skill fallback exception for skill {0}: {1}\n{2}", Template?.Id, ex.Message, ex.StackTrace);
+                            try { EndSkill(caster); } catch { }
+                        }
+                        finally
+                        {
+                            if (_castFallbacks.TryRemove(tlIdSnapshot, out var removedCts))
+                            {
+                                try { removedCts?.Dispose(); } catch { }
+                            }
+                        }
+                    });
+                    // Ownership transferred to dictionary entry
+                    cts = null;
+                }
+                finally
+                {
+                    cts?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Skill.Use failed to schedule async fallback for skill {0}: {1}", Template?.Id, ex.Message);
+            }
         }
         else
         {
@@ -618,6 +686,9 @@ public class Skill
     {
         if (caster is not Unit unit) { return; }
         Logger.Debug("Skill.Cast enter: skill={0}, tlId={1}, caster={2}, target={3}", Template?.Id, TlId, caster?.ObjId, targetCaster?.ObjId);
+
+        // Cancel any pending async fallback for this TlId (normal path)
+        CancelCastFallbackInternal(TlId);
 
         if (!_bypassGcd)
         {
@@ -1338,6 +1409,9 @@ public class Skill
             return;
         Logger.Debug("Skill.EndSkill: skill={0}, tlId={1}, cancelled={2}", Template?.Id, TlId, Cancelled);
 
+        // Ensure fallback is cancelled on normal end
+        CancelCastFallbackInternal(TlId);
+
         if (caster is Character character)
         {
             var laborCost = Template.ConsumeLaborPower;
@@ -1398,11 +1472,24 @@ public class Skill
         unit.OnSkillEnd(this);
         unit.SkillTask = null;
         Cancelled = true;
+        // Ensure fallback is cancelled on stop
+        CancelCastFallbackInternal(TlId);
         SkillTlIdManager.ReleaseId(TlId);
         TlId = 0;
 
         if (caster is Character character && character.IgnoreSkillCooldowns)
             character.ResetSkillCooldown(Template.Id, false);
+    }
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope", Justification = "CancellationTokenSource instance is retrieved from the dictionary and disposed immediately after TryRemove. The analyzer misattributes creation to the out variable.")]
+    private void CancelCastFallbackInternal(ushort tlId)
+    {
+        if (tlId == 0)
+            return;
+        if (_castFallbacks.TryRemove(tlId, out var cts))
+        {
+            try { cts.Cancel(); cts.Dispose(); } catch { /* best effort */ }
+        }
     }
 
     public SkillHitType RollCombatDice(BaseUnit attacker, BaseUnit target)
