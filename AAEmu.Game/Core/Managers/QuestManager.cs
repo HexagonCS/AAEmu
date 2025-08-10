@@ -137,6 +137,7 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
     /// <param name="quest"></param>
     public void EnqueueEvaluation(Quest quest)
     {
+        bool needNewTask = false;
         lock (_evaluationQueueLock)
         {
             if (!EvaluationQueue.Contains(quest))
@@ -144,12 +145,13 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
 
             Logger.Info($"EnqueueEvaluation, {quest.Owner.Name} ({quest.Owner.Id}), Quest {quest.TemplateId}");
 
-            // Kick a single-shot runner if none is currently in flight.
-            if (!_runnerInFlight)
-            {
-                TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
-            }
+            // Debounce: only schedule a runner when the queue transitions from empty to non-empty
+            // and there isn't a runner currently in flight.
+            needNewTask = (EvaluationQueue.Count == 1) && !_runnerInFlight;
         }
+
+        if (needNewTask)
+            TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(1));
     }
 
     /// <summary>
@@ -312,8 +314,7 @@ public partial class QuestManager : Singleton<QuestManager>, IQuestManager
         // TODO: Make sure it obeys server time settings
         TaskManager.Instance.CronSchedule(new QuestDailyResetTask(), dailyCron);
 
-        // Start a lightweight watchdog to ensure the evaluation queue is drained even after errors.
-        TaskManager.Instance.Schedule(new QuestManagerRunQueueTask(), TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+        // Removed periodic watchdog: queue runs are debounced and self-sustaining.
     }
 
     /// <summary>
