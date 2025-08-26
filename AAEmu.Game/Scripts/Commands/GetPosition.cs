@@ -4,6 +4,7 @@ using AAEmu.Game.Models.Game.Char;
 using AAEmu.Game.Core.Managers.World;
 using AAEmu.Game.Models.Game.NPChar;
 using AAEmu.Game.Utils.Scripts;
+using AAEmu.Game.Utils;
 
 namespace AAEmu.Game.Scripts.Commands;
 
@@ -32,11 +33,12 @@ public class GetPosition : ICommand
         if (character.CurrentTarget != null && character.CurrentTarget != character)
         {
             var pos = character.CurrentTarget.Transform.CloneAsSpawnPosition();
+            var (cellX, cellY) = pos.AsPositionVector().ToCellIndex();
 
             if (character.CurrentTarget is Npc npc)
             {
                 CommandManager.SendNormalText(this, messageOutput,
-                    $"Id: {npc.Spawner.Id}, ObjId: {character.CurrentTarget.ObjId}, TemplateId: {npc.TemplateId} X: |cFFFFFFFF{pos.X}|r  Y: |cFFFFFFFF{pos.Y}|r  Z: |cFFFFFFFF{pos.Z}|r");
+                    $"Id: {npc.Spawner.Id}, ObjId: {character.CurrentTarget.ObjId}, TemplateId: {npc.TemplateId} X: |cFFFFFFFF{pos.X}|r  Y: |cFFFFFFFF{pos.Y}|r  Z: |cFFFFFFFF{pos.Z}|r  Cell: |cFFFFFFFF{cellX}_{cellY}|r");
             }
         }
         else
@@ -48,6 +50,7 @@ public class GetPosition : ICommand
             }
 
             var pos = targetPlayer.Transform.CloneAsSpawnPosition();
+            var (cellX, cellY) = pos.AsPositionVector().ToCellIndex();
 
             var zonename = "???";
             var zone = ZoneManager.Instance.GetZoneByKey(pos.ZoneId);
@@ -57,7 +60,7 @@ public class GetPosition : ICommand
             }
 
             CommandManager.SendNormalText(this, messageOutput,
-                $"|cFFFFFFFF{targetPlayer.Name}|r X: |cFFFFFFFF{pos.X:F1}|r  Y: |cFFFFFFFF{pos.Y:F1}|r  Z: |cFFFFFFFF{pos.Z:F1}|r  RotZ: |cFFFFFFFF{pos.Yaw:F0}|r  ZoneId: |cFFFFFFFF{pos.ZoneId}|r {zonename}  SubZoneId: |cFFFFFFFF{targetPlayer.SubZoneId}|r  Instance: |cFFFFFFFF{targetPlayer.ParentWorld}|r");
+                $"|cFFFFFFFF{targetPlayer.Name}|r X: |cFFFFFFFF{pos.X:F1}|r  Y: |cFFFFFFFF{pos.Y:F1}|r  Z: |cFFFFFFFF{pos.Z:F1}|r  RotZ: |cFFFFFFFF{pos.Yaw:F0}|r  ZoneId: |cFFFFFFFF{pos.ZoneId}|r {zonename}  SubZoneId: |cFFFFFFFF{targetPlayer.SubZoneId}|r  Cell: |cFFFFFFFF{cellX}_{cellY}|r  Instance: |cFFFFFFFF{targetPlayer.ParentWorld}|r");
         }
     }
 }
